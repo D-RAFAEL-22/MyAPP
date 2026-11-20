@@ -83,7 +83,10 @@ export function renderSpecToHtml(
 
     const rawVal = spec.state[badge.bind] ?? badge.value ?? '';
     const key = String(rawVal);
-    const opt = badge.options[key] ?? Object.values(badge.options)[0] ?? { label: key, tone: 'neutral' };
+    const opt =
+      badge.options[key] ??
+      badge.options['*'] ??
+      Object.values(badge.options)[0] ?? { label: key, tone: 'neutral' };
 
     return `<span class="bg" data-b="${escAttr(badge.bind)}" data-bm="${bmKey}" data-t="${escAttr(opt.tone)}">${escText(opt.label)}</span>`;
   }
@@ -266,6 +269,7 @@ export function renderSpecToHtml(
       case 'ButtonRow': {
         usedCss.add('btn');
         const renderedBtns: string[] = [];
+        let visibleCount = 0;
 
         for (const btn of node.buttons) {
           const styleCls =
@@ -278,7 +282,9 @@ export function renderSpecToHtml(
             usedRuntime.add('req');
             hasStatusLine = true;
             if (activeActs) usedRuntime.add('bind');
-            const isHidden = activeActs && !activeActs.has(btn.action) ? ' hidden' : '';
+            const hiddenByAct = Boolean(activeActs && !activeActs.has(btn.action));
+            if (!hiddenByAct) visibleCount++;
+            const isHidden = hiddenByAct ? ' hidden' : '';
             renderedBtns.push(
               `<button type="button" class="bt${styleCls}" data-k="${escAttr(payload)}" data-ak="${escAttr(btn.action)}"${isHidden}>${escText(btn.label)}</button>`,
             );
@@ -286,11 +292,13 @@ export function renderSpecToHtml(
             const url = links[btn.link];
             if (!url) continue;
             usedRuntime.add('link');
+            visibleCount++;
             renderedBtns.push(
               `<button type="button" class="bt${styleCls}" data-u="${escAttr(url)}">${escText(btn.label)}</button>`,
             );
           } else if (btn.kind === 'local') {
             usedRuntime.add('more');
+            visibleCount++;
             const backAttr = btn.labelBack
               ? ` data-l1="${escAttr(btn.label)}" data-l2="${escAttr(btn.labelBack)}"`
               : '';
@@ -301,7 +309,8 @@ export function renderSpecToHtml(
         }
 
         if (renderedBtns.length === 0) return '';
-        return `<div class="br"${commonAttrs}>${renderedBtns.join('')}</div>`;
+        const rowHidden = visibleCount === 0 && !isToggleTarget ? ' hidden' : '';
+        return `<div class="br"${commonAttrs}${rowHidden}>${renderedBtns.join('')}</div>`;
       }
 
       case 'Divider':

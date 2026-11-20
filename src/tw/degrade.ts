@@ -2,9 +2,13 @@ import type { RenderPlanOverrides } from './height.ts';
 import { LIMITS } from './limits.ts';
 import type { ListNode, TextNode, WidgetNode, WidgetSpec } from './types.ts';
 
+export type BudgetFailReason = 'deflated' | 'html' | 'height';
+
 export interface DegradationCandidate {
   step: 'collapse' | 'paginate' | 'truncate';
+  nodeId: string;
   label: string;
+  appliesTo: (reason: BudgetFailReason, overrides: RenderPlanOverrides) => boolean;
   apply: (overrides: RenderPlanOverrides, truncatedFullTexts: string[]) => void;
 }
 
@@ -33,7 +37,11 @@ function collectTextsAndLists(
  * 1. Collapse Text nodes: secondary priority first, then longest primary texts (except the first Text).
  * 2. Paginate List nodes: reduce pageSize step-by-step down to 4, then 3.
  * 3. Truncate longest Text nodes to progressive character limits (full text preserved in caption).
- * Action buttons are NEVER dropped.
+ *
+ * Reason-aware skipping (preserves §4.7 order while avoiding counter-productive steps):
+ * - collapse & paginate only help 'height' (wrapping in <details> adds bytes on 'deflated'/'html').
+ * - truncate on an already-collapsed Text only helps 'deflated'/'html' (closed <details> height is fixed).
+ * Action buttons, ButtonRow, and Header.title are NEVER dropped.
  */
 export function buildDegradationPlan(
   spec: WidgetSpec,
@@ -53,7 +61,9 @@ export function buildDegradationPlan(
   for (const t of secondaryTexts) {
     plan.push({
       step: 'collapse',
+      nodeId: t.id,
       label: `collapse:${t.id}`,
+      appliesTo: (reason, overrides) => reason === 'height' && !overrides.collapsedTextIds.has(t.id),
       apply: (overrides) => {
         overrides.collapsedTextIds.add(t.id);
       },
@@ -67,7 +77,9 @@ export function buildDegradationPlan(
   for (const t of primaryCollapsible) {
     plan.push({
       step: 'collapse',
+      nodeId: t.id,
       label: `collapse:${t.id}`,
+      appliesTo: (reason, overrides) => reason === 'height' && !overrides.collapsedTextIds.has(t.id),
       apply: (overrides) => {
         overrides.collapsedTextIds.add(t.id);
       },
@@ -80,7 +92,9 @@ export function buildDegradationPlan(
     if (l.node.items.length > 4 && startSize >= 5) {
       plan.push({
         step: 'paginate',
+        nodeId: l.id,
         label: `paginate:${l.id}:4`,
+        appliesTo: (reason) => reason === 'height',
         apply: (overrides) => {
           overrides.listPageSizes.set(l.id, 4);
         },
@@ -89,7 +103,9 @@ export function buildDegradationPlan(
     if (l.node.items.length > 3 && startSize >= 4) {
       plan.push({
         step: 'paginate',
+        nodeId: l.id,
         label: `paginate:${l.id}:3`,
+        appliesTo: (reason) => reason === 'height',
         apply: (overrides) => {
           overrides.listPageSizes.set(l.id, 3);
         },
@@ -108,7 +124,15 @@ export function buildDegradationPlan(
       if (t.node.text.length > limit) {
         plan.push({
           step: 'truncate',
+          nodeId: t.id,
           label: `truncate:${t.id}:${limit}`,
+          appliesTo: (reason, overrides) => {
+            if (reason === 'height' && overrides.collapsedTextIds.has(t.id)) {
+              return false;
+            }
+            const prev = overrides.truncatedTexts.get(t.id);
+            return prev === undefined || limit < prev;
+          },
           apply: (overrides, truncatedFullTexts) => {
             overrides.truncatedTexts.set(t.id, limit);
             if (!truncatedFullTexts.includes(t.node.text)) {

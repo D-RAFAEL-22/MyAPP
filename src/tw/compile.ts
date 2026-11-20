@@ -99,10 +99,15 @@ export function compileWidget(
     };
 
     let attempt = measureOnce();
-    let stepIdx = 0;
+    const usedSteps = new Set<number>();
 
-    while (attempt.failReason !== null && stepIdx < degradationSteps.length) {
-      const step = degradationSteps[stepIdx++];
+    while (attempt.failReason !== null) {
+      const nextIdx = degradationSteps.findIndex(
+        (step, idx) => !usedSteps.has(idx) && step.appliesTo(attempt.failReason!, overrides),
+      );
+      if (nextIdx === -1) break;
+      usedSteps.add(nextIdx);
+      const step = degradationSteps[nextIdx];
       step.apply(overrides, truncatedFullTexts);
       appliedDegraded.push(step.label);
       attempt = measureOnce();

@@ -48,6 +48,7 @@ export const WIDGET_PRESETS: WidgetPreset[] = [
                 in_progress: { label: 'В работе', tone: 'accent' },
                 done: { label: 'Готово', tone: 'success' },
                 overdue: { label: 'Просрочена', tone: 'danger' },
+                '*': { label: 'Обновлено в SAYF', tone: 'neutral' },
               },
             },
           },

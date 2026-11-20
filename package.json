@@ -7,7 +7,10 @@
     "dev": "tsx server.ts",
     "build": "vite build",
     "start": "node server.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check:profile1": "tsx scripts/check-profile1.ts",
+    "weigh": "tsx scripts/weigh.ts",
+    "test:live-bot": "tsx examples/live-test-bot.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.5",
